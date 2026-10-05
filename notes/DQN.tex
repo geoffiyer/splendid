@@ -1,0 +1,380 @@
+\documentclass[11pt,notitlepage]{report}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{microtype}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{algorithm}{Algorithm}
+
+\theoremstyle{plain}
+\newtheorem{lemma}{Lemma}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.5em}
+
+\title{DQN notes}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+
+\chapter{HuggingFace Q-Learning}\label{chap:hface}
+\url{https://huggingface.co/learn/deep-rl-course/en/unit2/what-is-rl}
+
+\section{Tons of definitions}
+
+\begin{definition}[Policy]\label{def:policy}
+    Usually notated as $\pi$.
+    Just a function from $States \to Actions$.
+
+    They like to call the optimal policy $\pi^*$
+\end{definition}
+\begin{definition}[Policy-based method]\label{def:policy-based}
+    Try to find $\pi^*$ directly.
+    In other words your model will input $State$ and output $Action$.
+    And you will train against some loss to get a better model.
+\end{definition}
+\begin{definition}[Value-based method]\label{def:value-based}
+    Still trying to find $\pi^*$, but add in one intermediate step.
+    Build a function that maps $States \to \mathbb{R}$. Where target is "Value".
+    If your value function is optimal then you can easily get optimal policy (search neighboring states
+    for highest value).
+    But you can do other things based on the value too. Maybe you do a beam-search down to a certain depth.
+    Maybe you set some "exploration vs exploitation" params. Etc. etc.
+\end{definition}
+There's some dependency between value-based and policy-based. Not inherent in the definition but pretty
+common in actual practice. i.e. most of the time you look for value assuming a given policy.
+(It's too hard to ascribe a direct "value" to a state. You need to know some stuff about neighbors.
+But to do that you need a policy.)
+\begin{definition}[Value Function]\label{def:value-function}
+    Given a policy $\pi$, we make a value function.
+    \[v_\pi: States \to \mathbb{R}.\]
+    This particular value function uses "expected discounted return". I get the impression that this is
+    a very popular way to convert policy to value.
+    \[v_\pi(s) = \mathbb{E}\left[R_{t+1} + \gamma R_{t+2} + \gamma^2 R_{t+3} + \ldots \vert S_t = s\right]\]
+    This is creating a value by starting in state $S_t$ and then following the policy to get to future states.
+    $R_x$ is the reward you get out of state $S_x$.
+
+    What the heck is $R_x$? They call it the "immediate reward" from the state transition $S_t \overset{action}{\to} S_{t+1}$.
+    I'm guessing we'll talk how to pick "immediate reward" in the future.
+    The way that makes the most sense in my head is for "reward" to only come from a terminal state, but
+    I'm sure that for bigger problems that would be troublesome (ex: in binary success/fail, if your model
+    never sees a success it will be REALLY HARD to learn anything).
+    
+    $0 \leq \gamma \leq 1$ is the "discount". My guess is that $\gamma$ is just a training param.
+    Your uninitialized model will have some pretty crazy values attached to states and $\gamma$ decides
+    how hard you backprop.
+\end{definition}
+
+So I guess all this setup is to motivate why do we optimize a value function instead of policy directly.
+And the answer is that it helps for us to have a bit more control over the final policy.
+Ex: There's a popular method called "Epsilon-Greedy" where your policy sometimes picks the best
+value and sometimes doesn't (explore/exploit).
+
+\begin{definition}[State Value Function]
+    \[V_\pi(s) = E_\pi\left[G_t\vert S_t = s\right]\]
+    \begin{itemize}
+    \item $V_\pi(s) =$ value of state $s$ following policy $\pi$.
+    \item $E_\pi\left[\ldots\right] =$ expected return following policy $\pi$.
+    \item $G_t =$ They called this $v_\pi(s)$ earlier. I guess they just really
+    love introducing more terms for the same thing. Anyway its the 
+    $\mathbb{E}\left[R_{t+1} + \gamma R_{t+2} + \gamma^2 R_{t+3} + \ldots\right]$ you saw before.
+    \item $S_t = s$ means that I'm starting in state $s$.
+    \end{itemize}
+\end{definition}
+\begin{definition}[Action Value Function]\label{def:action-value-function}
+    \[Q_\pi(s,a) = E_\pi\left[G_t\vert S_t = s, A_t = a\right]\]
+    Very similar to state value but now the action at time $t$ is a param.
+\end{definition}
+
+In the website they introduce these as if they're really different.
+I wonder how different they are really? $A_t$ is determined based on the policy,
+and the policy is an argument of $V_\pi(s)$. I feel like one is just a weighted average
+of another (assuming your policy is stochastic).
+
+Oh I guess that's the next slide.
+\begin{lemma}[Bellman Equation]
+    \[V_\pi(s) = E_\pi\left[R_{t+1} + \gamma \times V_\pi\left(S_{t+1}\right)\vert S_t = s\right]\]
+\end{lemma}
+\begin{proof}
+Ummm... Duh?
+I think all that's missing is some explanation.
+They don't specify what action is taken for $t+1$, but I think it's clear from context
+that you get it from the policy $\pi$.
+\end{proof}
+
+\section{How to Learn?}
+\begin{definition}[Monte Carlo Learning]\label{monte-carlo-learning}
+    \[V(S_t) \leftarrow V(S_t) + \alpha\left[G_t - V(S_t)\right]\]
+    After you finish an "episode" (whatever that is) you can update your value function.
+    Just make an adjustment according to the diff between the observed return from
+    the episode and the estimated return.
+
+    And to be clear, you apply the adjustment for each step $t$ that you took in the episode.
+\end{definition}
+\begin{definition}[Temporal Difference Learning]\label{temporal-difference-learning}
+    Don't wait until the end of the episode. You can learn at each step.
+    \[V(S_t) \leftarrow V(S_t) + \alpha\left[R_{t+1} + \gamma V(S_{t+1}) - V(S_t)\right]\]
+    So in the Monte Carlo above we've finished the episode so we know the exact reward $G_t$.
+    Here we're still in the middle of the episode. But $R_{t+1}$ is a real signal. And $V(S_{t+1})$
+    is just our best guess so far.
+\end{definition}
+
+The website provides no discussion about which method is better in which cases.
+My first instinct is that Monte Carlo is really bad when your problem is big and your
+policy is not well trained. If you're not going to see enough of the different terminal states
+to get an idea of the shape of the problem then you're going to fail pretty badly.
+But the good news in Monte Carlo is that it's easier to judge reward when you're already
+at a terminal state.
+
+I think one downside of the Temporal Difference is... who's picking that reward function?
+I hope you pick correctly because the model is going to be learning entirely off of that.
+If you pick a bad reward function then you'll learn garbage.
+The good news though is that you can solve problems this way that you would never get
+by Monte Carlo. If you model is too bad to actually "win" then it can at least get
+some intermediate signal.
+
+\section{Q-Learning}
+I think this is where I get to actually learn something?
+With the above context it's pretty easy to define.
+You're optimizing an Action-Value function \ref{def:action-value-function}.
+So you have a function $States \times Actions \to \mathbb{R}$ representing value.
+And you train it using the Temporal-Difference style laid out above.
+(That means you need a reward for each transition).
+
+One common policy is called "Epsilon-Greedy".
+At each step, choose the action with the highest $Q$ value with probability
+$1-\epsilon$, or a random action with probability $\epsilon$.
+
+And you'll have to cleverly vary $\epsilon$ over the course of training,
+don't ask me the specifics.
+
+\begin{definition}[On-Policy and Off-Policy]
+    On-Policy = Same policy used for acting and updating
+    Off-Policy = Different policy used for acting and updating
+\end{definition}
+
+Relevant here because of $\epsilon$-Greedy. The acting policy includes the
+$\epsilon$ but the training policy does not.
+
+\begin{algorithm}[Q-Learning]
+\begin{itemize}
+\item In state $s$, choose action $a$ (best or random).
+\item Observe reward $r$ and next state $s'$.
+\item Move $Q(s,a)$ toward $r + \gamma \max_{a'} Q(s',a')$ (just $r$ if terminal).
+\item Repeat; restart when the episode ends.
+\end{itemize}
+\end{algorithm}
+
+\section{Deep Q-Learning}
+
+So the previous chapter explictely write a table of size $States \times Actions$
+and then manually updated it (I don't include the worked example in these notes).
+Which is great for games of size similar to Tic-Tac-Toe and otherwise pretty useless.
+
+This chapter is going to talk about putting a NN in there.
+
+They suggest that input = State, and output = Actions. Note the plural ActionSSSS.
+In otherwords, the input = an encoding of the state into whatever size vector.
+The output = a vector the size of all possible actions. Where the meaning is the Q-value
+of that (state, action) pair.
+
+The specific encoding I think could get interesting but we're going to ignore it for now.
+
+They next talk about the NN structure. They're playing some video game by looking at the
+screen, and they talk about convolutional layers. We're not going to do that. Skip this
+bit.
+
+\begin{definition}[Q-Target]\label{def:q-target}
+    \[y_j = r_j + \gamma \text{max}_{a'}\hat{Q}\left(\phi_{j+1}, a'; \theta^-\right)\]
+    Ahahaha lol what.
+
+    I think they're saying that we would LOVE if the action NN output corresponding to
+    action $a'$ corresponds to immediate reward plus discounted NN estimate of greedy
+    next step.
+
+    Unclear what $theta^-$ is. I know $theta$ is just the NN parameters.
+
+    Oh yeah they rewrote the same thing in different notation.
+    \[R_{t+1} + \gamma \text{max}_{a} Q\left(S_{t+1}, a\right)\]
+    So the output of $\text{NN}(s)$ for a specific action should be the immediate
+    reward gained by that action plus the NN's own prediction of greedy value from
+    that state forward. (which is an estimate of the actual value from that state forward).
+\end{definition}
+\begin{definition}[Q-loss]\label{def:q-loss}
+    \[y_j - Q\left(\phi_j, a_j; \theta\right)\]
+    I'm not going to re-write it in the other notation. It's clear.
+    Diff between real value and target value is loss.
+\end{definition}
+
+\section{DQN Algorithm}
+Next comes the actual training algorithm:
+\begin{algorithm}
+It's better to train on batches, for reasons that I REALLY SHOULD look at in more detail
+(IIUC, more stable gradients? Also maybe it's computationally more efficient? Or maybe not.)
+So you take some number of samples and store a "replay memory", just keeping track of all
+the stuff you need to know to do a train step. Then once you have enough you can do a train step.
+
+They say (without explaining) that you should randomly sample a smaller batch from your replay
+memory. I wonder why??
+
+They also explain what the heck is $Q$ and $\hat{Q}$ above, which I appreciate.
+See in \ref{def:q-target} that the loss itself depends on our estimate of value.
+Well, we would not like to deal with recursive nonsense. Instead we have
+both $\hat{Q}$ and $Q$.
+
+Set $\hat{Q} = Q$ at the beginning (i.e. $\theta^- = \theta$). Train steps will
+pull $Q$ away from $\hat{Q}$. Every $C$ steps reset $\hat{Q} = Q$.
+\end{algorithm}
+
+Now for some explanations!
+\begin{itemize}
+\item Why "replay memory". I didn't totally understand the website. One convincing reason is to have a bunch of different gamestates in each train step (more stable gradients). Otherwise, for example, if your NN is playing level 2 it will get all its gradients from level 2 and forget level 1. They also say that the NN can learn from an experience more than once. But not clear that's a positive??
+\item Why $\hat{Q}$? I think we touched that above. The stated reason is to reduce oscillation. Without $\hat{Q}$ it's like the training is chasing itself. This way we chase a stable point for a while, then chase the next stable point for a while.
+\item Double DQN. Okay this is really not adequately explained in the website. They're talking about having a DQN network and a target network. And they suggest decouple to prevent an overweighted Q from messing up the whole training (since we assume next step is greedy)
+Is this the $\hat{Q}$ and $Q$ above? Because those aren't really decoupled... I wonder what this item is talking about.
+Update: I asked chatGPT and it says this is just the $\hat{Q}$ and $Q$ above. It's supposed to reduce biases from an overestimated node screwing up all its neighbors.
+I don't really agree yet ($\hat{Q}$ and $Q$ are pretty similar) but I see the intention.
+\end{itemize}
+
+Okay I think we can build our first model now?
+
+\chapter{PyTorch DQN Tutorial}\label{chap:pytorch}
+
+My notes on this file:
+\url{https://docs.pytorch.org/tutorials/intermediate/reinforcement_q_learning.html}
+
+\section{Two classes:}
+
+\subsection{Transition}
+
+A tuple representing a single transition in the environment.
+Supposedly it maps
+\((\text{state}, \text{action}) \rightarrow (\text{next\_state}, \text{reward})\).
+
+\subsection{ReplayMemory}
+
+So apparently we want to hold some amount of the most recent
+\textbf{Transition} tuples.
+I think it will be made clear later what this is all about. Presumably something
+about the training step(s).
+
+\section{DQN Algorithm}
+
+\begin{definition}[Return]\label{def:return}
+The \textbf{return} at time \(t_0\) is the discounted cumulative reward
+\[
+    R_{t_0} = \sum_{t=t_0}^{\infty} \gamma^{t-t_0} r_t.
+\]
+\end{definition}
+
+Okay what are all of these things?
+
+\begin{itemize}
+    \item \(0 < \gamma < 1\). The discount on the reward. Partially to make
+          the sum converge and partially to weight near rewards higher than
+          far (I guess presuming your model is bad at predicting too far in
+          the future)
+    \item \(r_t =\) presumably the reward at transition \(t\).
+\end{itemize}
+
+\subsection{Q-learning}
+
+Imagine we had a function
+\[Q^*: State \times Action \to \mathbb{R}\]
+where the value is equal to the \hyperref[def:return]{return}.
+
+Well if we had this we could easily optimize towards this return.
+\[\pi^*(s) = \text{argmax}_{a}Q^*(s,a)\]
+Here $\pi^*$ is our "policy function". Given a state it picks an action.
+And because we assumed $Q^*$ gives the exact return, then this $\pi^*$ is the
+optimal function for that particular return function.
+
+Well now stop assuming that we know $Q^*$ and instead train your NN to approximate it.
+
+Apparently this thing is the "Bellman Equation". Let's puzzle out what they're talking about.
+\[Q^\pi(s,a) = R(s,a) + \gamma Q^\pi(s', \pi(s'))\]
+\begin{itemize}
+\item $Q^\pi(s,a) =$ Expected return if we take action $a$ then use the policy $\pi$ thereafter
+\item $R(s,a) =$ reward when taking action $a$ from state $s$.
+\item $\gamma =$ same as above. Whatever your future discount factor.
+\item $Q^\pi(s', \pi(s')) =$ hopefully clear. $s'$ is the next state after $(s,a)$.
+\end{itemize}
+Okay, that's not so complicated. The value of a given action is equal to its reward plus the expected
+future reward from the future state(s).
+
+The website then defines
+\[\delta = Q(s,a) - \left(r+\gamma \text{max}_a' Q(s',a)\right)\]
+and says we're going to minimize $\delta$. This makes no sense to me? I thought by Bellman's
+equation up there we know that this $\delta$ is just zero? But maybe it's just some confusion
+over what all of these $s'$, $\text{max}'$ really mean.
+
+Okay I asked the AI for clarification. It said to clarify $Q$ above as $Q_\theta$.
+\[Q_\theta = \text{neural net's prediction of } Q^*\]
+So the "Bellman Equation" which makes perfect sense for a policy does not automatically apply
+to $Q_\theta$.
+
+It's a bit easier to start at the end and work backwards. In some terminal state/action $s, a$:
+\[Q*(s,a) = R(s,a)\]
+\[Q_\theta(s,a) = \text{depends on }\theta.\text{ But we should train it to equal } R(s,a).\]
+And non-terminal states make sense too. It just depends on how $Q_\theta$ estimates the
+various adjacent states.
+
+\subsection{loss function}
+They say they want to use "Huber Loss", which is essentially $\left|error\right|^2$ for small-ish values
+and $\left|error\right|$ for big-ish values. I don't really care about that at this time.
+We can debate different loss functions after I understand a bit better the theory.
+
+\section{Implementation Detail}
+\subsection{NN Dimensions}
+Okay... so we are training a NN trying to predict $Q^*(s,a)$. How do we set up the training?
+Ignore some of the NN details right now. Just say it's standard feed-forward MLP with relu.
+What's the input and output?
+
+The website says "Our model will be a feed forward neural network that takes in the difference between the current and previous screen patches"
+What does that mean? I understand "feed forward NN" perfectly well. I don't understand the input.
+They same the input dimension = "\texttt{n\_observations}" which... what? In their dummy problem I thought the input would
+be some state of the underlying game. Where the cart is in relation to the stick or whatever.
+
+Okay I asked Codex to explain it to me. "\texttt{n\_observations}" means the number of input features.
+In this problem it's 4. Cart position, cart velocity, pole angle, pole angular velocity.
+
+I believe the output dimension = number of possible actions
+And the meaning of the output value = expected reward from this action.
+For the dummy problem on the website it's simple because there are two actions and they are always available.
+
+So after reading some this makes sense now.
+Input layer = state of the game, one node per state item
+Output layer = expected reward per action, one node per possible action
+Middle layers = some simple MLP feed-forward RELU
+
+\subsection{How to Train?}
+I think this website I'm following is just not very good.
+They introduce a "\text{target\_net}" somewhere late into it without explanation of what it's doing.
+Now we have two NN. A policy NN and a target NN. I've heard of this before in other places so it
+kind of makes sense but I'm disappointed in the lack of explanation. 
+
+\chapter{Hugging Face Deep RL Course}\label{chap:huggingface}
+
+\section{Q-Learning (Unit 2)}
+\url{https://huggingface.co/learn/deep-rl-course/en/unit2/introduction}
+
+% Add your Unit 2 notes here.
+
+\section{Deep Q-Learning (Unit 3)}
+\url{https://huggingface.co/learn/deep-rl-course/en/unit3/introduction}
+
+% Add your Unit 3 notes here.
+
+\end{document}

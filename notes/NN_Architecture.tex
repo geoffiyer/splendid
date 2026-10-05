@@ -1,0 +1,89 @@
+\documentclass[11pt,notitlepage]{report}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{microtype}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{algorithm}{Algorithm}
+
+\theoremstyle{plain}
+\newtheorem{lemma}{Lemma}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.5em}
+
+\title{NN Architecture notes}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+
+\chapter{Stanford CS231n}
+\url{https://cs231n.github.io/neural-networks-1/#neural-network-architectures}
+
+I already know a lot of this so going to skip most of it. Weights and biases.
+They say that for classic Feed-Forward (they call this MLP right?) that 3 layers
+is usually "good enough" and having more is not often helpful. This strikes me
+as absolutely wild. But I've never actually built MLP before so who am I to say.
+
+They mention a few ways to prevent overfitting but don't explain them.
+(L2 regularization, dropout, input noise). I at least sort-of know what those are
+anyways so it's not too big a deal.
+
+Apparently some research has shown that smaller networks are more likely to get
+stuck in a bad local minimum. Very interesting, I wonder why.
+
+Overall I learned ~nothing from this page.
+
+\chapter{Pandas Preprocessing}
+\url{https://d2l.ai/chapter_preliminaries/pandas.html}
+WOW! WAY TOO low-level. It says to convert your features into a vector of real numbers.
+That's a really useless page.
+
+\chapter{More Stanford CS231n}
+\url{https://cs231n.github.io/neural-networks-2/}
+
+This is interesting background but not useful for my projects.
+They're talking about various preprocessing, from simple to complicated.
+Zero-center, normalization are the simple.
+They then talk about PCA, which feels a bit crazy that my PhD shows up here.
+It's been so long though that I don't remember everything. Something something
+grab some eigenvectors of somebody.
+Reduce the dimensionality by only using the top eigenvalues. Nice.
+The also suggest to divide by eigenvalues along the eigenbasis as a way of
+REALLY REALLY normalizing.
+
+\section{Weight Initialization}
+
+Okay this actually matters for my project. How to initialize the weights?
+\begin{itemize}
+\item All-zero initialization = really stupid. Once you have symmetry you can't go back
+\item Small random numbers = good start. Unclear if they should be small or not. (Small number = small gradient for backprop)
+\item Small random numbers + normalized variance.
+If we just have small random numbers then variance of a neuron increases with fan-in.
+So depending on layer dimensions... I guess your training is non-uniform? Hard to imagine
+EXACTLY the issue but it makes sense this could be bad. If one layer gets too little update
+and another layer gets too much.
+
+Instead divide by $1/\sqrt{n}$, where $n$ is the fan-in. Somebody else scale variance with
+$2/\left(n_{in} + n_{out}\right)$. I think this is getting over my head for now. Good to know
+the starting details and I'll learn more later (maybe).
+\item Sparse initialization. Another way to address the uncalibrated variances problem is to
+set all weight matrices to zero, but to break symmetry every neuron is randomly connected
+(with weights sampled from a small gaussian as above) to a fixed number of neurons below it.
+A typical number of neurons to connect to may be as small as 10.
+TODO: This means you don't have fully connected layers????
+\end{itemize}
+
+\end{document}
