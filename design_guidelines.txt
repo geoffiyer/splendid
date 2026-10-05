@@ -1,0 +1,24 @@
+Splendor AI: Project Purpose
+
+This project explores training a small neural network to play the board game
+Splendor. Its purpose is fun and education: learning how a neural network works,
+how it learns to make decisions, and how to understand its behavior.
+
+Learning Comes First
+
+The objective is not to build the fastest model or the strongest Splendor player.
+The objective is to understand what we build and why it behaves the way it does.
+Keep the project small and approachable, with room to explore one idea at a time.
+When performance and understanding compete, prioritize understanding.
+
+Experimentation Is the Work
+
+Try ideas, make mistakes, observe what happens, analyze the results, and try again.
+Failed experiments and weak players are useful when they teach us something.
+Question assumptions and treat surprising results as opportunities to learn.
+
+What Success Means
+
+Success means being able to explain what we tried, what happened, what we learned,
+and what we want to explore next. Playing Splendor gives the learning a concrete
+goal, but winning games is secondary to curiosity, understanding, and enjoyment.
