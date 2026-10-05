@@ -8,6 +8,8 @@
 \usepackage{amsthm}
 \usepackage{microtype}
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\usepackage{xurl}
+\setlength{\emergencystretch}{2em}
 
 \theoremstyle{definition}
 \newtheorem{definition}{Definition}
@@ -79,11 +81,28 @@ and another layer gets too much.
 Instead divide by $1/\sqrt{n}$, where $n$ is the fan-in. Somebody else scale variance with
 $2/\left(n_{in} + n_{out}\right)$. I think this is getting over my head for now. Good to know
 the starting details and I'll learn more later (maybe).
-\item Sparse initialization. Another way to address the uncalibrated variances problem is to
-set all weight matrices to zero, but to break symmetry every neuron is randomly connected
-(with weights sampled from a small gaussian as above) to a fixed number of neurons below it.
-A typical number of neurons to connect to may be as small as 10.
-TODO: This means you don't have fully connected layers????
+\item Sparse initialization. Set almost all weights to zero, but each node has non-zero (random)
+initialized connection to ~10 nodes below it. So it's not symmetric anymore but still most stuff is zero.
+\item Bias initialization. This page seems unsure what to do. Some recommendations are
+to set it all to zero, or to set it all to some low non-zero number (so all the ReLU fire)
+\item Batch Normalization. Add a BatchNorm layer immediately after each fully connected layer,
+before nonlinearities. Since BatchNorm is differentiable this works great for your gradient
+descent. TODO: learn the details of BatchNorm (I have a guess but I'm sure it's not exact).
 \end{itemize}
+
+\section{Regularization}
+
+Seems I need to learn some more vocab before I can understand this.
+Let's quit here and come back later.
+
+\begin{itemize}
+\item L2 Regularization
+\item L1 Regularization
+\item Max norm constraint
+\item Dropout
+\end{itemize}
+
+\chapter{Gymnasium}
+\url{https://gymnasium.farama.org/main/introduction/create_custom_env/?utm_source=openai}
 
 \end{document}
